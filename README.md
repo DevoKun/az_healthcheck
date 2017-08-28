@@ -89,3 +89,34 @@ service supervisor restart
 
 ```
 
+
+
+
+
+## Testing
+
+### Start an HTTP listener on port 80
+
+```bash
+sudo python -m SimpleHTTPServer 80
+```
+
+
+
+### Start an HTTP listener on port 8080
+
+```shell
+sudo python -m SimpleHTTPServer 8080
+```
+
+
+
+### Start AZ_HealthCheck
+
+* The **deafults** will check for two HTTP services running on localhost **tcp:80** and **tcp:8080**.
+
+```shell
+./az_healthcheck
+```
+
+
