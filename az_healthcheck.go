@@ -200,9 +200,9 @@ func httpHealthCheck() {
 
   //fmt.Println("203 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
   if (azHealthcheckErrorCount > 0) {
-    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"unhealthy\",\"time\":"+now+"}"
+    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"statusText\":\"unhealthy\",\"time\":\""+now+"\"}"
   } else {
-    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"healthy\",\"time\":"+now+"}"
+    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"time\":\""+now+"\"}"
   } // if else
   azHealthcheckErrorCount = azHealthcheckErrorCountLocal
 
