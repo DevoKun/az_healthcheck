@@ -34,17 +34,19 @@ package main
 
 import (
   "io"
+  "net"
   "net/http"
   "fmt"
   "time"
   "gopkg.in/yaml.v2"
   "github.com/fatih/color"
-  "github.com/davecgh/go-spew/spew"
+  //"github.com/davecgh/go-spew/spew"
   "io/ioutil"
   "path/filepath"
   "strconv"
   "strings"
   //"os"
+  //"syscall"
 ) // import
 
 
@@ -56,18 +58,18 @@ import (
 //
 
 type azHealthcheckConfig struct {
-  AllowedFailedChecks int                                      `yaml:"allowed_failed_checks"`
-  Options             map[string]azHealthcheckConfig_options   `yaml:"options"`
-  HttpChecks          map[string]azHealthcheckConfig_httpCheck `yaml:"httpchecks"`
+  BrowserAgent          string `yaml:"browserAgent"`
+  Check_mk_service_name string `yaml:"check_mk_service_name"`
+  CheckInterval         string `yaml:"checkInterval"`
+  Port                  string `yaml:"port"`
+  StatusFile            string `yaml:"statusFile"`
+  Hosts                 map[string]azHealthcheckConfigHost `yaml:"hosts"`
 } // type azHealthcheckConfig
 
-type azHealthcheckConfig_options struct {
-  statusFileName string `yaml:"status_file_name"`
-} // type azHealthcheckConfig_httpCheck
-
-type azHealthcheckConfig_httpCheck struct {
-  Url     string            `yaml:"url"`
-  Headers map[string]string `yaml:"headers"`
+type azHealthcheckConfigHost struct {
+  Name     string            `yaml:"name"`
+  Url      string            `yaml:"url"`
+  Headers  map[string]string `yaml:"headers,omitempty"`
 } // type azHealthcheckConfig_httpCheck
 
 
@@ -76,7 +78,9 @@ type azHealthcheckConfig_httpCheck struct {
 // Global Variables
 //
 
-var a azHealthcheckConfig
+var config azHealthcheckConfig
+var azHealthcheckErrorCount    = 0
+var azHealthcheckStatusMessage = ""
 
 //
 // Functions
@@ -87,142 +91,221 @@ func keepLines(s string, n int) string {
   return strings.Replace(result, "\r", "", -1)
 }
 
-func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
+
+//
+// HTTP Health Monitor
+// Makes call out to each server in the AZ
+// and sets global variable which is used by the http listener
+//
+
+func httpHealthMonitor() {
+  fmt.Println(color.YellowString(time.Now().String()), color.GreenString("Starting up asynchronous AZ Health Monitor...\n") )
+  for {
+    time.Sleep(3 * time.Second)
+    httpHealthCheck()
+  }
+} // func httpHealthMonitor
+
+
+
+func httpHealthCheck() {
   
-  azHealthcheckErrorCount            := 0
+  //fmt.Println("113 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
+  azHealthcheckErrorCountLocal       := 0
+  //fmt.Println("115 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
   var azHealthcheckResponseMessages  [100]string
   azHealthcheckResponseMessagesCount := 1
 
-  fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Answering HTTP Request") )
+  fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Checking Health of AZ Hosts") )
 
-  //allowed_failed_checks := a.AllowedFailedChecks
-  for k, v := range a.HttpChecks {
+  for k, v := range config.Hosts {
     fmt.Println( color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": ") + color.CyanString(v.Url) )
 
     req, err := http.NewRequest("GET", v.Url, nil)
     if err != nil {
-      // handle err
+      errorCheck(err)
     } // if err
 
     for hk,hv := range v.Headers {
-      fmt.Println(color.WhiteString("    ** -h ") + color.MagentaString(hk) + color.WhiteString(": ") + color.RedString(hv) )
+      fmt.Println(color.WhiteString("    ** -h ") + 
+                  color.MagentaString(hk) + 
+                  color.WhiteString(": ") + 
+                  color.RedString(hv) )
       req.Header.Set(hk, hv)
     } // for
 
-    resp, err := http.DefaultClient.Do(req)
-    if err != nil {
-      // handle err
+
+    netTransport := &http.Transport{
+      Dial: (&net.Dialer{
+        Timeout:   10 * time.Second,
+        KeepAlive: 10 * time.Second,
+      }).Dial,
+      TLSHandshakeTimeout:   10 * time.Second,
+      ResponseHeaderTimeout: 10 * time.Second,
+      ExpectContinueTimeout:  1 * time.Second,
     }
-    defer resp.Body.Close()
 
-    if resp.StatusCode != 200 { // OK
-      // non http 200 response code
+    client := http.Client{
+      Timeout:   time.Second * 10,
+      Transport: netTransport,
+    } // http.Client
 
-      //w.WriteHeader(http.StatusServiceUnavailable)
-      //io.WriteString(w, strconv.Itoa(resp.StatusCode) + " ERROR")
-      azHealthcheckErrorCount = azHealthcheckErrorCount + 1
-      azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = strconv.Itoa(resp.StatusCode) + " ERROR from: [" + v.Url + "]"
-      azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
-    } else {
+    resp, err := client.Do(req)
+    //resp, err := http.DefaultClient.Do(req)
+    if err != nil {
 
-      //bodyBytes, err2 := ioutil.ReadAll(resp.Body)
-      _, err2 := ioutil.ReadAll(resp.Body)
-      //bodyString := string(bodyBytes)
-      if err2 != nil {
-        fmt.Println( color.YellowString(" !!!! ") + color.RedString("Unable to get response body") + color.YellowString(" !!!! ") )
-        //w.WriteHeader(http.StatusServiceUnavailable)
-        //io.WriteString(w, "Unable to get response body")
-        azHealthcheckErrorCount = azHealthcheckErrorCount + 1
-        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "Unable to get response body from: [" + v.Url + "]"
-        azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
+      azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
+      if (strings.Contains(err.Error(), "connection refused")) {
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "(ECONNREFUSED) Connection Refused: Server is offline or not responding"
       } else {
-        //fmt.Println("[" + bodyString + "]")
-        //w.WriteHeader(http.StatusOK)
-        //io.WriteString(w, "[" + bodyString + "]")
-        azHealthcheckErrorCount = azHealthcheckErrorCount + 1
-        //azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "[" + bodyString + "]"
-        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "successful query to: [" + v.Url + "]"
-        azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
-      } // if err
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = err.Error()
+      } // if
+      azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
 
-    } // if resp.StatusCode != 200
+    } else { // if err != nil
+      defer resp.Body.Close()
+
+      if resp.StatusCode != 200 { // OK
+        // non http 200 response code
+
+        azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = strconv.Itoa(resp.StatusCode) + " ERROR from: [" + v.Url + "]"
+        azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
+
+      } else {
+
+        _, err2 := ioutil.ReadAll(resp.Body)
+        if err2 != nil {
+          fmt.Println( color.YellowString(" !!!! ") + color.RedString("Unable to get response body") + color.YellowString(" !!!! ") )
+          azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
+          azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "Unable to get response body from: [" + v.Url + "]"
+          azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
+        } else {
+          azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "successful query to: [" + v.Url + "] (" + strconv.Itoa(resp.StatusCode) + ")"
+          azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
+        } // if err
+
+      } // if resp.StatusCode != 200
+
+    } // if err
+
 
   } // for
 
   fmt.Println("")
 
+  t := time.Now()
+  //fmt.Println(t.String())
+  //fmt.Println(t.Format("2006-01-02 15:04:05 +0000 UTC"))
+  now := t.Format("2006-01-02 15:04:05 +0000 UTC")
+
+  //fmt.Println("203 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
+  if (azHealthcheckErrorCount > 0) {
+    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"unhealthy\",\"time\":"+now+"}"
+  } else {
+    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"healthy\",\"time\":"+now+"}"
+  } // if else
+  azHealthcheckErrorCount = azHealthcheckErrorCountLocal
+
+
+
+} // func httpHealthCheck
+
+
+
+func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
+  
+  fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Answering HTTP Request") )
+
+  //for k, v := range config.Hosts {
+  //  fmt.Println( color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": ") + color.CyanString(v.Url) )
+
+  //fmt.Println("")
+
+  /*
+  WriteHeader sends an HTTP response header with status code.
+  If WriteHeader is not called explicitly,
+  the first call to Write will trigger an implicit WriteHeader(http.StatusOK).
+  Thus explicit calls to WriteHeader are mainly used to send error codes.
+  */
   if (azHealthcheckErrorCount > 0) {
     w.WriteHeader(http.StatusServiceUnavailable)
-    status_file_msg := "unhealthy since $now UTC";
-  } else {
-    w.WriteHeader(http.StatusOK)
-    status_file_msg := "healthy since $now UTC";
-  } // if else
+  } // if
+  io.WriteString(w, azHealthcheckStatusMessage + "\n")
+  //for _, azHealthcheckResponseMessage := range azHealthcheckResponseMessages {    
+  //  if ( "x" + azHealthcheckResponseMessage != "x" ) {
+  //    io.WriteString(w, azHealthcheckResponseMessage + "\n")
+  //  } // if
+  //} // for
 
-  for _, azHealthcheckResponseMessage := range azHealthcheckResponseMessages {    
-    if ( "x" + azHealthcheckResponseMessage != "x" ) {
-      io.WriteString(w, azHealthcheckResponseMessage + "\n")
-    } // if
-  //for i := 0; i < len(azHealthcheckResponseMessages); i++ {
-    //io.WriteString(w, azHealthcheckResponseMessages[i] + "\n")
-  } // for
-  
-
-  spew.Dump(a.Options)
-  /*
-  f, err := os.Create(a.Options.statusFileName)
-  check(err)
-  defer f.Close()
-  n3, err := f.WriteString(status_file_msg)
-  f.Sync()
-  */
-
-} // func hello
+} // func httpHealthAnswer
 
 
+func printConfigVal(k string, v string) {
+  fmt.Println(color.WhiteString("  * ") + 
+              color.YellowString(k + "") + 
+              color.WhiteString(": [") + 
+              color.CyanString(v + "") + 
+              color.WhiteString("]"))
 
+} // func
 
 func azHealthcheckConfigLoad() {
 
   configFilename, _ := filepath.Abs("./az_healthcheck.yaml")
 
   yamlData, err := ioutil.ReadFile(configFilename)
-  check(err)
+  errorCheck(err)
 
-  if err := yaml.Unmarshal([]byte(yamlData), &a); err != nil {
+  if err := yaml.Unmarshal([]byte(yamlData), &config); err != nil {
     fmt.Println(err.Error())
   } // if
 
-  //spew.Dump(a)
-
-  fmt.Println(color.YellowString("allowed_failed_checks") + color.WhiteString(": [") + color.CyanString(strconv.Itoa(a.AllowedFailedChecks)) + color.WhiteString("]"))
   fmt.Println(color.YellowString("Options"))
-  for k, v := range a.Options {
-    fmt.Println(color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": [") + color.CyanString(v) + color.WhiteString("]"))
-  } // for
+  printConfigVal("browserAgent",          config.BrowserAgent)
+  printConfigVal("check_mk_service_name", config.Check_mk_service_name)
+  printConfigVal("checkInterval",         config.CheckInterval)
+  printConfigVal("port",                  config.Port)
+  printConfigVal("statusFile",            config.StatusFile)
+
   fmt.Println("")
-  fmt.Println(color.YellowString("HTTP Checks"))
-  for k, v := range a.HttpChecks {
+  fmt.Println(color.YellowString("Host Checks"))
+  for k, v := range config.Hosts {
     fmt.Println( color.WhiteString("  * ") + color.YellowString(k) )
-    fmt.Println( color.WhiteString("    ** ") + color.YellowString("URL") + color.WhiteString(": [") + color.CyanString(v.Url) + color.WhiteString("]") )
-    fmt.Println( color.WhiteString("    ** ") + color.YellowString("Headers") )
-    for _,h := range v.Headers {
-      fmt.Println(color.WhiteString("      *** ") + color.RedString(h) )
+
+    fmt.Println( color.WhiteString("    ** ") + 
+                 color.YellowString("Name") + 
+                 color.WhiteString(": [") + 
+                 color.CyanString(v.Name) + 
+                 color.WhiteString("]") )
+
+    fmt.Println( color.WhiteString("    ** ") + 
+                 color.YellowString("URL") + 
+                 color.WhiteString(": [") + 
+                 color.CyanString(v.Url) + 
+                 color.WhiteString("]") )
+
+    fmt.Println( color.WhiteString("    ** ") + 
+                 color.YellowString("Headers") )
+    for hk,hv := range v.Headers {
+      fmt.Println(color.WhiteString("       *** ") + 
+                  color.MagentaString(hk) + 
+                  color.WhiteString(": ") + 
+                  color.RedString(hv) )
     } // for
 
   } // for
 
   fmt.Println("")
 
-} // func yamltest
+} // func azHealthcheckConfigLoad
 
 
-func check(e error) {
+func errorCheck(e error) {
   if e != nil {
     panic(e)
   } // if
-} // func check
-
+} // func errorCheck
 
 
 
@@ -230,9 +313,12 @@ func main() {
 
   azHealthcheckConfigLoad()
 
+  go httpHealthMonitor()
+
   fmt.Println(color.YellowString(time.Now().String()), color.GreenString("Starting up http listener...") )
   http.HandleFunc("/", httpHealthAnswer)
-  http.ListenAndServe(":8000", nil)
+  http.ListenAndServe(":3000", nil)
+
 } // func main
 
 
