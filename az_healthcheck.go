@@ -62,7 +62,6 @@ type azHealthcheckConfig struct {
   Check_mk_service_name string `yaml:"check_mk_service_name"`
   CheckInterval         string `yaml:"checkInterval"`
   Port                  string `yaml:"port"`
-  StatusFile            string `yaml:"statusFile"`
   Hosts                 map[string]azHealthcheckConfigHost `yaml:"hosts"`
 } // type azHealthcheckConfig
 
@@ -266,7 +265,6 @@ func azHealthcheckConfigLoad() {
   printConfigVal("check_mk_service_name", config.Check_mk_service_name)
   printConfigVal("checkInterval",         config.CheckInterval)
   printConfigVal("port",                  config.Port)
-  printConfigVal("statusFile",            config.StatusFile)
 
   fmt.Println("")
   fmt.Println(color.YellowString("Host Checks"))
