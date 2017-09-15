@@ -45,7 +45,7 @@ import (
   "path/filepath"
   "strconv"
   "strings"
-  //"os"
+  "os"
   //"syscall"
 ) // import
 
@@ -251,11 +251,26 @@ func printConfigVal(k string, v string) {
 
 func azHealthcheckConfigLoad() {
 
-  configFilename, _ := filepath.Abs("./az_healthcheck.yaml")
+  configFilename := ""
+  absConfigFilename,_ := filepath.Abs("./az_healthcheck.yaml");
+  if _,err := os.Stat("/etc/az_healthcheck.yaml"); err == nil {
+    configFilename = "/etc/az_healthcheck.yaml"
+    printConfigVal("Found config file at", configFilename)
+  } else if _,err = os.Stat(absConfigFilename); err == nil {
+    configFilename = absConfigFilename
+    printConfigVal("Found config file at", configFilename)
+  } else {
+    fmt.Println(color.YellowString("  !! ") +
+                color.RedString("Unable to locate ") + color.YellowString("az_healthcheck.yaml") + color.RedString(" config file") +
+                color.YellowString(" !!"))
+    os.Exit(1)
+  } // if fileExists
 
+  printConfigVal("Reading YAML config file", configFilename)
   yamlData, err := ioutil.ReadFile(configFilename)
   errorCheck(err)
 
+  fmt.Println(color.WhiteString("  * ") + color.GreenString("Parsing YAML"))
   if err := yaml.Unmarshal([]byte(yamlData), &config); err != nil {
     fmt.Println(err.Error())
   } // if
