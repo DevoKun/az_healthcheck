@@ -109,9 +109,7 @@ func httpHealthMonitor() {
 
 func httpHealthCheck() {
   
-  //fmt.Println("113 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
   azHealthcheckErrorCountLocal       := 0
-  //fmt.Println("115 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
   var azHealthcheckResponseMessages  [100]string
   azHealthcheckResponseMessagesCount := 1
 
@@ -150,7 +148,6 @@ func httpHealthCheck() {
     } // http.Client
 
     resp, err := client.Do(req)
-    //resp, err := http.DefaultClient.Do(req)
     if err != nil {
 
       azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
@@ -194,19 +191,14 @@ func httpHealthCheck() {
   fmt.Println("")
 
   t := time.Now()
-  //fmt.Println(t.String())
-  //fmt.Println(t.Format("2006-01-02 15:04:05 +0000 UTC"))
   now := t.Format("2006-01-02 15:04:05 +0000 UTC")
 
-  //fmt.Println("203 - azHealthcheckErrorCount: ", azHealthcheckErrorCount)
   if (azHealthcheckErrorCount > 0) {
     azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"statusText\":\"unhealthy\",\"time\":\""+now+"\"}"
   } else {
     azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"time\":\""+now+"\"}"
   } // if else
   azHealthcheckErrorCount = azHealthcheckErrorCountLocal
-
-
 
 } // func httpHealthCheck
 
@@ -215,11 +207,6 @@ func httpHealthCheck() {
 func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   
   fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Answering HTTP Request") )
-
-  //for k, v := range config.Hosts {
-  //  fmt.Println( color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": ") + color.CyanString(v.Url) )
-
-  //fmt.Println("")
 
   /*
   WriteHeader sends an HTTP response header with status code.
@@ -231,11 +218,6 @@ func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusServiceUnavailable)
   } // if
   io.WriteString(w, azHealthcheckStatusMessage + "\n")
-  //for _, azHealthcheckResponseMessage := range azHealthcheckResponseMessages {    
-  //  if ( "x" + azHealthcheckResponseMessage != "x" ) {
-  //    io.WriteString(w, azHealthcheckResponseMessage + "\n")
-  //  } // if
-  //} // for
 
 } // func httpHealthAnswer
 
@@ -252,16 +234,18 @@ func printConfigVal(k string, v string) {
 func azHealthcheckConfigLoad() {
 
   configFilename := ""
-  absConfigFilename,_ := filepath.Abs("./az_healthcheck.yaml");
-  if _,err := os.Stat("/etc/az_healthcheck.yaml"); err == nil {
-    configFilename = "/etc/az_healthcheck.yaml"
+  absConfigFilename,_ := filepath.Abs("./azhealthcheck.yaml");
+  if _,err := os.Stat("/etc/azhealthcheck.yaml"); err == nil {
+    configFilename = "/etc/azhealthcheck.yaml"
     printConfigVal("Found config file at", configFilename)
   } else if _,err = os.Stat(absConfigFilename); err == nil {
     configFilename = absConfigFilename
     printConfigVal("Found config file at", configFilename)
   } else {
     fmt.Println(color.YellowString("  !! ") +
-                color.RedString("Unable to locate ") + color.YellowString("az_healthcheck.yaml") + color.RedString(" config file") +
+                color.RedString("Unable to locate ") + 
+                color.YellowString("azhealthcheck.yaml") + 
+                color.RedString(" config file") +
                 color.YellowString(" !!"))
     os.Exit(1)
   } // if fileExists

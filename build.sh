@@ -1,9 +1,11 @@
 #!/bin/bash
 
-TARGET_FILENAME="az_healthcheck"
+TARGET_FILENAME="azhealthcheck"
 
 if [ ! -d target ]; then
   mkdir -p target
+else
+  rm -f target/* 2>/dev/null &1
 fi
 
 
