@@ -5,7 +5,7 @@ TARGET_FILENAME="azhealthcheck"
 if [ ! -d target ]; then
   mkdir -p target
 else
-  rm -f target/* 2>/dev/null &1
+  rm -f target/* 1>/dev/null 2>&1
 fi
 
 

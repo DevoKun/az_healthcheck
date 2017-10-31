@@ -165,7 +165,7 @@ func httpHealthCheck() {
         // non http 200 response code
 
         azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
-        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = k + ' ' + strconv.Itoa(resp.StatusCode) + " ERROR from: [" + v.Url + "]"
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = strconv.Itoa(resp.StatusCode) + " ERROR from: [" + v.Url + "]"
         azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
 
       } else {
