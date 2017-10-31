@@ -113,7 +113,7 @@ sudo python -m SimpleHTTPServer 8080
 
 ### Start AZ_HealthCheck
 
-* The **deafults** will check for two HTTP services running on localhost **tcp:80** and **tcp:8080**.
+* The **defaults** will check for two HTTP services running on localhost **tcp:80** and **tcp:8080**.
 
 ```shell
 ./az_healthcheck

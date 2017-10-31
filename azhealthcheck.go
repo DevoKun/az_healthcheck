@@ -152,9 +152,9 @@ func httpHealthCheck() {
 
       azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
       if (strings.Contains(err.Error(), "connection refused")) {
-        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "(ECONNREFUSED) Connection Refused: Server is offline or not responding"
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = k + " (ECONNREFUSED) Connection Refused: Server is offline or not responding"
       } else {
-        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = err.Error()
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = k + " " + err.Error()
       } // if
       azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
 
@@ -165,7 +165,7 @@ func httpHealthCheck() {
         // non http 200 response code
 
         azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
-        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = strconv.Itoa(resp.StatusCode) + " ERROR from: [" + v.Url + "]"
+        azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = k + ' ' + strconv.Itoa(resp.StatusCode) + " ERROR from: [" + v.Url + "]"
         azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
 
       } else {
@@ -174,10 +174,10 @@ func httpHealthCheck() {
         if err2 != nil {
           fmt.Println( color.YellowString(" !!!! ") + color.RedString("Unable to get response body") + color.YellowString(" !!!! ") )
           azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
-          azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "Unable to get response body from: [" + v.Url + "]"
+          azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = k + " Unable to get response body from: [" + v.Url + "]"
           azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
         } else {
-          azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = "successful query to: [" + v.Url + "] (" + strconv.Itoa(resp.StatusCode) + ")"
+          azHealthcheckResponseMessages[azHealthcheckResponseMessagesCount] = k + " successful query to: [" + v.Url + "] (" + strconv.Itoa(resp.StatusCode) + ")"
           azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
         } // if err
 
@@ -193,10 +193,17 @@ func httpHealthCheck() {
   t := time.Now()
   now := t.Format("2006-01-02 15:04:05 +0000 UTC")
 
+  azHealthcheckHostStatusesMessage := ""
+  for _, rmv := range azHealthcheckResponseMessages {
+    if ((rmv + "x") != "x") {
+      azHealthcheckHostStatusesMessage = azHealthcheckHostStatusesMessage + rmv + "; "
+    }
+  } // for
+
   if (azHealthcheckErrorCount > 0) {
-    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"statusText\":\"unhealthy\",\"time\":\""+now+"\"}"
+    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"statusText\":\"unhealthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\"\"time\":\""+now+"\"}"
   } else {
-    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"time\":\""+now+"\"}"
+    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\"\"time\":\""+now+"\"}"
   } // if else
   azHealthcheckErrorCount = azHealthcheckErrorCountLocal
 
@@ -252,6 +259,7 @@ func azHealthcheckConfigLoad() {
 
   printConfigVal("Reading YAML config file", configFilename)
   yamlData, err := ioutil.ReadFile(configFilename)
+  fmt.Printf("File contents: %s", yamlData)
   errorCheck(err)
 
   fmt.Println(color.WhiteString("  * ") + color.GreenString("Parsing YAML"))
