@@ -1,4 +1,4 @@
-# az_healthcheck
+# Availability Zone (AZ) Healthcheck
 
 
 
@@ -14,12 +14,12 @@
 
 ## Configuration
 
-* Configuration is done using a simple **YAML** file called **az_healthcheck.yaml**
-* **az_healthcheck** will look for the configuration file in **/etc/az_healthcheck.yaml** or **$(pwd)/az_healthcheck.yaml**
+* Configuration is done using a simple **YAML** file called **azhealthcheck.yaml**
+* **azhealthcheck** will look for the configuration file in **/etc/azhealthcheck.yaml** or **$(pwd)/azhealthcheck.yaml**
 
 
 
-**FILE**: az_healthcheck.yaml
+**FILE**: azhealthcheck.yaml
 
 ```yaml
 ---
@@ -36,14 +36,77 @@ httpchecks:
   slashdot:
     url: "https://www.slashdot.org/"
 
+```
+
+
+
+### Support for MutualSSL *(Client Certs)*
+
+* Normally when connecting to a remote https server endpoint the only requirement is that the server have valid SSL/TLS certificates in use.
+* If the server requires that the client be connecting using valid SSL/TLS certificates, azhealthcheck can support the requirement.
+* azhealthcheck supports the use of PEM formatted SSL certificate files.
+* Pass the location to the Client Certificate and Key files in as **clientcertfilename** and **clientkeyfilename** variables in the per-host yaml configuration
+
+```yaml
+
+hosts:
+
+  apache2:
+    name: apache2
+    url: https://0.0.0.0/
+    clientcertfilename:   /etc/ssl/certs/test.crt
+    clientkeyfilename:    /etc/ssl/private/test.key
 
 ```
 
 
 
+#### MutualSSL Enabled in Apache2
+
+```apa
+  ### Apache2 VHost MutualSSL Support Enabled
+  SSLVerifyClient      require
+  SSLVerifyDepth       2
+  SSLCACertificateFile "/etc/ssl/certs/mutualssl_ca.pem"
+```
+
+
+
+#### MutualSSL Support Enabled in AZHealthcheck on a per-host basis
+
+```yaml
+
+---
+browserAgent: azh
+check_mk_service_name: azhealthcheck
+checkInterval: 3000
+port: 3000
+
+hosts:
+
+  prodFrontend:
+    name: prodFrontend
+    url: https://frontend.production/healthcheck
+    headers:
+      'X-Browser-Agent': 'AZ HealthCheck'
+    clientcertfilename:   /etc/ssl/certs/test.crt
+    clientkeyfilename:    /etc/ssl/private/test.key
+
+  prodBackend
+    name: prodBackend
+    url: https://backend.production/healthcheck
+    headers:
+      'X-Browser-Agent': 'AZ HealthCheck'
+    clientcertfilename:   /etc/ssl/certs/test.crt
+    clientkeyfilename:    /etc/ssl/private/test.key
+
+```
+
+
+
+
+
 ## Run with Supervisor
-
-
 
 ```bash
 
@@ -72,20 +135,19 @@ files = /etc/supervisor/conf.d/*.conf
 EOF
 
 
-cat << EOF > /etc/supervisor/conf.d/az_healthcheck.conf
-[program:az_healthcheck]
-command        = /usr/local/bin/az_healthcheck
+cat << EOF > /etc/supervisor/conf.d/azhealthcheck.conf
+[program:azhealthcheck]
+command        = /usr/local/bin/azhealthcheck
 startsecs      = 5
 stopwaitsecs   = 3600
 stopasgroup    = false
 killasgroup    = true
-stdout_logfile = /var/log/az_healthcheck-stdout.log
-stderr_logfile = /var/log/az_healthcheck-stderr.log
+stdout_logfile = /var/log/azhealthcheck-stdout.log
+stderr_logfile = /var/log/azhealthcheck-stderr.log
 EOF
 
 
 service supervisor restart
-
 
 ```
 
@@ -111,12 +173,12 @@ sudo python -m SimpleHTTPServer 8080
 
 
 
-### Start AZ_HealthCheck
+### Start AZHealthCheck
 
 * The **defaults** will check for two HTTP services running on localhost **tcp:80** and **tcp:8080**.
 
 ```shell
-./az_healthcheck
+./azhealthcheck
 ```
 
 

@@ -33,19 +33,22 @@ package main
 //
 
 import (
+  "crypto/tls"
+  //"crypto/x509"
+  "fmt"
+  "github.com/fatih/color"
+  "gopkg.in/yaml.v2"
   "io"
+  "io/ioutil"
   "net"
   "net/http"
-  "fmt"
-  "time"
-  "gopkg.in/yaml.v2"
-  "github.com/fatih/color"
-  //"github.com/davecgh/go-spew/spew"
-  "io/ioutil"
+  "os"
   "path/filepath"
   "strconv"
   "strings"
-  "os"
+  "time"
+  //"reflect"
+  //"github.com/davecgh/go-spew/spew"
   //"syscall"
 ) // import
 
@@ -66,9 +69,12 @@ type azHealthcheckConfig struct {
 } // type azHealthcheckConfig
 
 type azHealthcheckConfigHost struct {
-  Name     string            `yaml:"name"`
-  Url      string            `yaml:"url"`
-  Headers  map[string]string `yaml:"headers,omitempty"`
+  Name                 string  `yaml:"name"`
+  Url                  string  `yaml:"url"`
+  Headers   map[string]string  `yaml:"headers,omitempty"`
+  ClientCertFilename   string  `yaml:"clientcertfilename"`
+  ClientKeyFilename    string  `yaml:"clientkeyfilename"`
+  //ClientCACertFilename string  `yaml:"clientcacertfilename"`
 } // type azHealthcheckConfig_httpCheck
 
 
@@ -112,11 +118,59 @@ func httpHealthCheck() {
   azHealthcheckErrorCountLocal       := 0
   var azHealthcheckResponseMessages  [100]string
   azHealthcheckResponseMessagesCount := 1
+  var tlsConfig    *tls.Config
+  var netTransport *http.Transport
 
   fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Checking Health of AZ Hosts") )
 
   for k, v := range config.Hosts {
     fmt.Println( color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": ") + color.CyanString(v.Url) )
+
+    useClientCerts := false
+    if ( //((v.ClientCACertFilename + "x") != "x") && 
+         ((v.ClientCertFilename   + "x") != "x") && 
+         ((v.ClientKeyFilename    + "x") != "x") ) {
+      useClientCerts = true
+      //fmt.Println(color.WhiteString("    ** ") +
+      //            color.MagentaString("Client CA Cert Filename ") + 
+      //            color.WhiteString(": ") + 
+      //            color.RedString(v.ClientCACertFilename) )
+
+      fmt.Println(color.WhiteString("    ** ") +
+                  color.MagentaString("Client Cert Filename ") + 
+                  color.WhiteString("...: ") + 
+                  color.RedString(v.ClientCertFilename) )
+      fmt.Println(color.WhiteString("    ** ") +
+                  color.MagentaString("Client Key Filename ") + 
+                  color.WhiteString("....: ") + 
+                  color.RedString(v.ClientKeyFilename) )
+
+      clientKeyPair, err := tls.LoadX509KeyPair(v.ClientCertFilename, v.ClientKeyFilename)
+      if err != nil {
+        fmt.Println(color.YellowString("    !! ") + 
+                    color.RedString("Unable to load Client Key Pair") )
+        fmt.Println(err)
+      } // if clientKeyPair
+
+      //clientCACert, err := ioutil.ReadFile(v.ClientCACertFilename)
+      //if err != nil {
+      //  fmt.Println(color.YellowString("    !! ") + 
+      //              color.RedString("Unable to load Client CA Cert") )
+      //  fmt.Println(err)
+      //} // if clientCACert
+
+    //caCertPool := x509.NewCertPool()
+    //caCertPool.AppendCertsFromPEM(clientCACert)
+
+    tlsConfig = &tls.Config{
+      Certificates: []tls.Certificate{clientKeyPair},
+      //RootCAs:      caCertPool,
+    }
+    tlsConfig.BuildNameToCertificate()
+    //fmt.Println(reflect.TypeOf(tlsConfig))
+    } // if
+
+
 
     req, err := http.NewRequest("GET", v.Url, nil)
     if err != nil {
@@ -131,16 +185,36 @@ func httpHealthCheck() {
       req.Header.Set(hk, hv)
     } // for
 
+    if useClientCerts {
+    //fmt.Println(useClientCerts)
+      fmt.Println(color.WhiteString("    ** ") + 
+                  color.GreenString("Connecting using Client Certs for ") + 
+                  color.WhiteString("MutualSSL"))
+      netTransport = &http.Transport{
+        Dial: (&net.Dialer{
+          Timeout:   10 * time.Second,
+          KeepAlive: 10 * time.Second,
+        }).Dial,
+        TLSClientConfig:       tlsConfig, // used for the client ssl cert auth
+        TLSHandshakeTimeout:   10 * time.Second,
+        ResponseHeaderTimeout: 10 * time.Second,
+        ExpectContinueTimeout:  1 * time.Second,
+      } // netTransport
+      //fmt.Println(reflect.TypeOf(netTransport))
 
-    netTransport := &http.Transport{
-      Dial: (&net.Dialer{
-        Timeout:   10 * time.Second,
-        KeepAlive: 10 * time.Second,
-      }).Dial,
-      TLSHandshakeTimeout:   10 * time.Second,
-      ResponseHeaderTimeout: 10 * time.Second,
-      ExpectContinueTimeout:  1 * time.Second,
-    }
+    } else { // if useClientCerts true
+      netTransport = &http.Transport{
+        Dial: (&net.Dialer{
+          Timeout:   10 * time.Second,
+          KeepAlive: 10 * time.Second,
+        }).Dial,
+        TLSHandshakeTimeout:   10 * time.Second,
+        ResponseHeaderTimeout: 10 * time.Second,
+        ExpectContinueTimeout:  1 * time.Second,
+      } // netTransport
+      //fmt.Println(reflect.TypeOf(netTransport))
+    } // if useClientCerts false
+
 
     client := http.Client{
       Timeout:   time.Second * 10,
@@ -201,9 +275,9 @@ func httpHealthCheck() {
   } // for
 
   if (azHealthcheckErrorCount > 0) {
-    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"statusText\":\"unhealthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\"\"time\":\""+now+"\"}"
+    azHealthcheckStatusMessage = "{\"statusCode\":\"503\",\"statusText\":\"unhealthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\",\"time\":\""+now+"\"}"
   } else {
-    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\"\"time\":\""+now+"\"}"
+    azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\",\"time\":\""+now+"\"}"
   } // if else
   azHealthcheckErrorCount = azHealthcheckErrorCountLocal
 
@@ -240,6 +314,7 @@ func printConfigVal(k string, v string) {
 
 func azHealthcheckConfigLoad() {
 
+  fmt.Println(color.GreenString("Looking for YAML config file"))
   configFilename := ""
   absConfigFilename,_ := filepath.Abs("./azhealthcheck.yaml");
   if _,err := os.Stat("/etc/azhealthcheck.yaml"); err == nil {
@@ -257,24 +332,25 @@ func azHealthcheckConfigLoad() {
     os.Exit(1)
   } // if fileExists
 
-  printConfigVal("Reading YAML config file", configFilename)
+  //printConfigVal("Reading YAML config file", configFilename)
+  fmt.Println(color.GreenString("Reading YAML config file"))
   yamlData, err := ioutil.ReadFile(configFilename)
-  fmt.Printf("File contents: %s", yamlData)
+  //fmt.Printf("File contents: %s", yamlData)
   errorCheck(err)
 
-  fmt.Println(color.WhiteString("  * ") + color.GreenString("Parsing YAML"))
+  fmt.Println(color.GreenString("Parsing YAML"))
   if err := yaml.Unmarshal([]byte(yamlData), &config); err != nil {
     fmt.Println(err.Error())
   } // if
 
-  fmt.Println(color.YellowString("Options"))
+  fmt.Println(color.GreenString("Options"))
   printConfigVal("browserAgent",          config.BrowserAgent)
   printConfigVal("check_mk_service_name", config.Check_mk_service_name)
   printConfigVal("checkInterval",         config.CheckInterval)
   printConfigVal("port",                  config.Port)
 
   fmt.Println("")
-  fmt.Println(color.YellowString("Host Checks"))
+  fmt.Println(color.GreenString("Host Checks"))
   for k, v := range config.Hosts {
     fmt.Println( color.WhiteString("  * ") + color.YellowString(k) )
 
@@ -298,6 +374,22 @@ func azHealthcheckConfigLoad() {
                   color.WhiteString(": ") + 
                   color.RedString(hv) )
     } // for
+
+    //fmt.Println( color.WhiteString("    ** ") + 
+    //             color.YellowString("ClientCACertFilename") + 
+    //             color.WhiteString(": [") + 
+    //             color.CyanString(v.ClientCACertFilename) + 
+    //             color.WhiteString("]") )
+    fmt.Println( color.WhiteString("    ** ") + 
+                 color.YellowString("ClientCertFilename") + 
+                 color.WhiteString("..: [") + 
+                 color.CyanString(v.ClientCertFilename) + 
+                 color.WhiteString("]") )
+    fmt.Println( color.WhiteString("    ** ") + 
+                 color.YellowString("ClientKeyFilename") + 
+                 color.WhiteString("...: [") + 
+                 color.CyanString(v.ClientKeyFilename) + 
+                 color.WhiteString("]") )
 
   } // for
 
