@@ -52,8 +52,8 @@ import (
   //"syscall"
 ) // import
 
-
-
+//import "os/exec"
+//import "bytes"
   
 
 //
@@ -104,9 +104,9 @@ func keepLines(s string, n int) string {
 //
 
 func httpHealthMonitor() {
-  fmt.Println(color.YellowString(time.Now().String()), color.GreenString("Starting up asynchronous AZ Health Monitor...\n") )
+  fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.GreenString("Starting up asynchronous AZ Health Monitor...\n") )
   for {
-    time.Sleep(3 * time.Second)
+    time.Sleep(10 * time.Second)
     httpHealthCheck()
   }
 } // func httpHealthMonitor
@@ -121,7 +121,7 @@ func httpHealthCheck() {
   var tlsConfig    *tls.Config
   var netTransport *http.Transport
 
-  fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Checking Health of AZ Hosts") )
+  fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.CyanString("Checking Health of AZ Hosts") )
 
   for k, v := range config.Hosts {
     fmt.Println( color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": ") + color.CyanString(v.Url) )
@@ -173,6 +173,15 @@ func httpHealthCheck() {
 
 
     req, err := http.NewRequest("GET", v.Url, nil)
+
+/*
+cmd := exec.Command("lsof") //, "|", "grep", "azheal", "|", "grep", "ESTABLISHED")
+var out bytes.Buffer
+cmd.Stdout = &out
+cmd.Run()
+fmt.Println(out.String())
+*/
+
     if err != nil {
       errorCheck(err)
     } // if err
@@ -193,7 +202,8 @@ func httpHealthCheck() {
       netTransport = &http.Transport{
         Dial: (&net.Dialer{
           Timeout:   10 * time.Second,
-          KeepAlive: 10 * time.Second,
+          DisableKeepAlives: true,
+          //KeepAlive: 10 * time.Second,
         }).Dial,
         TLSClientConfig:       tlsConfig, // used for the client ssl cert auth
         TLSHandshakeTimeout:   10 * time.Second,
@@ -206,7 +216,8 @@ func httpHealthCheck() {
       netTransport = &http.Transport{
         Dial: (&net.Dialer{
           Timeout:   10 * time.Second,
-          KeepAlive: 10 * time.Second,
+          DisableKeepAlives: true,
+          //KeepAlive: 10 * time.Second,
         }).Dial,
         TLSHandshakeTimeout:   10 * time.Second,
         ResponseHeaderTimeout: 10 * time.Second,
@@ -215,13 +226,18 @@ func httpHealthCheck() {
       //fmt.Println(reflect.TypeOf(netTransport))
     } // if useClientCerts false
 
-
+    http.DefaultClient.Timeout = 10 * time.Second
     client := http.Client{
       Timeout:   time.Second * 10,
       Transport: netTransport,
     } // http.Client
 
     resp, err := client.Do(req)
+    if (resp != nil) {
+      defer resp.Body.Close() // close connection if it is non-nil
+    }
+
+
     if err != nil {
 
       azHealthcheckErrorCountLocal = azHealthcheckErrorCountLocal + 1
@@ -233,8 +249,7 @@ func httpHealthCheck() {
       azHealthcheckResponseMessagesCount = azHealthcheckResponseMessagesCount + 1
 
     } else { // if err != nil
-      defer resp.Body.Close()
-
+      
       if resp.StatusCode != 200 { // OK
         // non http 200 response code
 
@@ -259,6 +274,9 @@ func httpHealthCheck() {
 
     } // if err
 
+  if (resp != nil) {
+    resp.Body.Close()
+  } // if
 
   } // for
 
@@ -280,14 +298,14 @@ func httpHealthCheck() {
     azHealthcheckStatusMessage = "{\"statusCode\":\"200\",\"statusText\":\"healthy\",\"hostStatuses\":\""+azHealthcheckHostStatusesMessage+"\",\"time\":\""+now+"\"}"
   } // if else
   azHealthcheckErrorCount = azHealthcheckErrorCountLocal
-
+  
 } // func httpHealthCheck
 
 
 
 func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   
-  fmt.Println(color.YellowString(time.Now().String()), color.CyanString("Answering HTTP Request") )
+  fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.CyanString("Answering HTTP Request") )
 
   /*
   WriteHeader sends an HTTP response header with status code.
@@ -408,11 +426,13 @@ func errorCheck(e error) {
 
 func main() {
 
+  http.DefaultClient.Timeout = 10 * time.Second
+
   azHealthcheckConfigLoad()
 
   go httpHealthMonitor()
 
-  fmt.Println(color.YellowString(time.Now().String()), color.GreenString("Starting up http listener...") )
+  fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.GreenString("Starting up http listener...") )
   http.HandleFunc("/", httpHealthAnswer)
   http.ListenAndServe(":3000", nil)
 
