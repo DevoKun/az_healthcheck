@@ -8,7 +8,7 @@
 * Provides an HTTP webservice that can be consumed by an ELB or Route53 healthcheck.
 * Writes a healthcheck status file on the local filesystem that can be consumed by monitoring software.
 
-![AZ Healthcheck Diagram](az_healthcheck.png)
+![AZ Healthcheck Diagram](https://raw.githubusercontent.com/DevoKun/az_healthcheck/master/azhealthcheck.png)
 
 
 
@@ -27,7 +27,7 @@ allowed_failed_checks: 0
 options:
   status_file_name: '/var/run/az_health_check.status'
 
-httpchecks:
+hosts:
   identme:
     url: "http://ident.me/"
     headers:
