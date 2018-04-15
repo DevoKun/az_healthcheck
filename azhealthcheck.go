@@ -202,8 +202,7 @@ fmt.Println(out.String())
       netTransport = &http.Transport{
         Dial: (&net.Dialer{
           Timeout:   10 * time.Second,
-          DisableKeepAlives: true,
-          //KeepAlive: 10 * time.Second,
+          KeepAlive: 1 * time.Second,
         }).Dial,
         TLSClientConfig:       tlsConfig, // used for the client ssl cert auth
         TLSHandshakeTimeout:   10 * time.Second,
@@ -216,8 +215,7 @@ fmt.Println(out.String())
       netTransport = &http.Transport{
         Dial: (&net.Dialer{
           Timeout:   10 * time.Second,
-          DisableKeepAlives: true,
-          //KeepAlive: 10 * time.Second,
+          KeepAlive: 1 * time.Second,
         }).Dial,
         TLSHandshakeTimeout:   10 * time.Second,
         ResponseHeaderTimeout: 10 * time.Second,
