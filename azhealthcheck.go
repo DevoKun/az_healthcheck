@@ -10,6 +10,18 @@
 //    StatusAlreadyReported               = 208 // RFC 5842, 7.1
 //    StatusIMUsed                        = 226 // RFC 3229, 10.4.1
 //
+//    StatusBadRequest                   = 400 // RFC 7231, 6.5.1
+//    StatusUnauthorized                 = 401 // RFC 7235, 3.1
+//    StatusPaymentRequired              = 402 // RFC 7231, 6.5.2
+//    StatusForbidden                    = 403 // RFC 7231, 6.5.3
+//    StatusNotFound                     = 404 // RFC 7231, 6.5.4
+//    StatusMethodNotAllowed             = 405 // RFC 7231, 6.5.5
+//    StatusNotAcceptable                = 406 // RFC 7231, 6.5.6
+//    StatusProxyAuthRequired            = 407 // RFC 7235, 3.2
+//    StatusRequestTimeout               = 408 // RFC 7231, 6.5.7
+//    StatusConflict                     = 409 // RFC 7231, 6.5.8
+//    StatusGone                         = 410 // RFC 7231, 6.5.9
+//
 //    StatusInternalServerError           = 500 // RFC 7231, 6.6.1
 //    StatusNotImplemented                = 501 // RFC 7231, 6.6.2
 //    StatusBadGateway                    = 502 // RFC 7231, 6.6.3
@@ -317,7 +329,11 @@ func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   the first call to Write will trigger an implicit WriteHeader(http.StatusOK).
   Thus explicit calls to WriteHeader are mainly used to send error codes.
   */
-  if (azHealthcheckErrorCount > 0) {
+  if r.URL.Path != "/" {
+    w.WriteHeader(http.StatusForbidden)
+    io.WriteString(w, "\n")
+    return
+  } else if (azHealthcheckErrorCount > 0) {
     w.WriteHeader(http.StatusServiceUnavailable)
   } // if
   io.WriteString(w, azHealthcheckStatusMessage + "\n")
