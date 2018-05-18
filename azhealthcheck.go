@@ -306,6 +306,12 @@ func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.CyanString("Answering HTTP Request") )
 
   /*
+  Set the Headers BEFORE calling WriteHeader
+  */
+  w.Header().Set("X-XSS-Protection",        "1; mode=block")
+  w.Header().Set("X-Content-Type-Options",  "nosniff")
+  w.Header().Set("Content-Security-Policy", "default-src 'self';")
+  /*
   WriteHeader sends an HTTP response header with status code.
   If WriteHeader is not called explicitly,
   the first call to Write will trigger an implicit WriteHeader(http.StatusOK).
