@@ -320,9 +320,12 @@ func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   /*
   Set the Headers BEFORE calling WriteHeader
   */
-  w.Header().Set("X-XSS-Protection",        "1; mode=block")
-  w.Header().Set("X-Content-Type-Options",  "nosniff")
-  w.Header().Set("Content-Security-Policy", "default-src 'self';")
+  w.Header().Set("X-XSS-Protection",          "1; mode=block")
+  w.Header().Set("X-Content-Type-Options",    "nosniff")
+  w.Header().Set("Content-Security-Policy",   "default-src 'self';")
+  w.Header().Set("X-Frame-Options",           "SAMEORIGIN")
+  w.Header().Set("X-Robots-Tag",              "noindex, noarchive, nosnippet")
+  w.Header().Set("Strict-Transport-Security", "max-age=631138519")
   /*
   WriteHeader sends an HTTP response header with status code.
   If WriteHeader is not called explicitly,
