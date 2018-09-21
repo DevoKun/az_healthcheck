@@ -176,6 +176,7 @@ func httpHealthCheck() {
 
     tlsConfig = &tls.Config{
       Certificates: []tls.Certificate{clientKeyPair},
+      InsecureSkipVerify: true, // do not fail if CN does not match the url
       //RootCAs:      caCertPool,
     }
     tlsConfig.BuildNameToCertificate()
