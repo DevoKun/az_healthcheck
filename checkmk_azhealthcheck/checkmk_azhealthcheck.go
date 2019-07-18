@@ -1,22 +1,18 @@
-#!/usr/bin/env ruby
 
-require "net/http"
-require "uri"
-require "socket"
-require "json"
-require "openssl"
+package main
 
-class String
-  def is_json?
-    begin
-      !!JSON.parse(self)
-    rescue
-      false
-    end ### begin
-  end ### def
-end ### class
+import (
+  "fmt"
+  "io/ioutil"
+  "net/http"
+  "strings"
+  "time"
+  "encoding/json"
+  "strconv"
+)
 
 
+/*
 def time_diff_milli(start, finish)
    (finish - start) * 1000.0
 end
@@ -57,30 +53,9 @@ def url_test(uri)
 
 end ### def
 
+*/
 
-##
-##
-##
-STATUS_OK                    = 0
-STATUS_WARNING               = 1
-STATUS_CRITICAL              = 2
-STATUS_UNKNOWN               = 3
-
-STATUS_OK_TXT                = "OK"
-STATUS_WARNING_TXT           = "WARNING"
-STATUS_CRITICAL_TXT          = "CRITICAL"
-STATUS_UNKNOWN_TXT           = "WARNING"
-
-azhealthcheck_status         = STATUS_OK
-azhealthcheck_status_txt     = STATUS_OK_TXT
-azhealthcheck_status_msg     = ""
-azhealthcheck_status_longmsg = ""
-
-
-azhealthcheck_url = 'http://0.0.0.0:3000/'
-
-azhealthcheck_uri = URI.parse(azhealthcheck_url)
-
+/*
 start_time = Time.now
 code, body = url_test(azhealthcheck_uri)
 stop_time  = Time.now
@@ -115,20 +90,91 @@ else
   azhealthcheck_status_longmsg = "#{azhealthcheck_status_longmsg}\\n\\n<h2>AZ_Healthcheck</h2>\\n<pre>" + JSON.pretty_generate(JSON.parse(body.to_s)).gsub(/\n/, "\\n") + "</pre>" 
 end
 
+*/
 
 
-# Status (Nagios codes)
-#   0 = OK
-#   1 = WARNING
-#   2 = CRITICAL
-#   3 = UNKNOWN
-# Item-name (underscore separated words)
-# Performance-data;
-#   varname=value;warn;crit;min;max|varname=value;warn;crit;min;max
-# Check-output
-puts azhealthcheck_status.to_s  + ' ' + 'az_healthcheck ' + 
-     'azhealthcheck_response_time_milliseconds=' + azhealthcheck_response_time.to_s + ';400;600;1;800 ' + 
-     azhealthcheck_status_txt  + ' - ' + 
-     azhealthcheck_status_msg + ' \n\n\n' + 
-     azhealthcheck_status_longmsg
 
+
+
+
+
+func main() {
+
+
+  const statusOk          = 0
+  const statusWarning     = 1
+  const statusCritical    = 2
+  const statusUnknown     = 3
+
+  const statusOkTxt       = "OK"
+  const statusWarningTxt  = "WARNING"
+  const statusCriticalTxt = "CRITICAL"
+  const statusUnknownTxt  = "WARNING"
+
+  status        := statusOk
+  statusTxt     := statusOkTxt
+  statusMsg     := ""
+  statusLongmsg := ""
+  var responseTime int64 = 0
+
+  azhealthcheckUrl := "http://0.0.0.0:3000/"
+
+
+  startTime := time.Now()
+  resp, errGet := http.Get(azhealthcheckUrl)
+  if errGet != nil {
+    panic(errGet)
+  }
+  defer resp.Body.Close()
+  body, errBody := ioutil.ReadAll(resp.Body)
+  if errBody != nil {
+    panic(errBody)
+  }
+  endTime := time.Now()
+
+  duration := endTime.Sub(startTime)
+  responseTime = duration.Nanoseconds()
+
+  jsonBody := make(map[string]string)
+
+  errJson := json.Unmarshal(body, &jsonBody)
+  if errJson != nil {
+    panic(errJson)
+  }
+
+  statusLongmsg = "" +
+    "statusCode: " + jsonBody["statusCode"] + "\\n" +
+    "statusText: " + jsonBody["statusText"] + "\\n" +
+    "time: " + jsonBody["time"] + "\\n\\n\\n" + 
+    strings.Join(strings.Split(string(body), "\n"), "\\n")
+
+  if (jsonBody["statusCode"] != "200") {
+    status    = statusWarning
+    statusTxt = statusWarningTxt
+    if (jsonBody["statusText"] == "unhealthy") {
+      statusMsg = statusMsg + "UNHEALTHY : " + jsonBody["statusText"]
+    }
+  }
+
+
+
+
+  // Status (Nagios codes)
+  //   0 = OK
+  //   1 = WARNING
+  //   2 = CRITICAL
+  //   3 = UNKNOWN
+  // Item-name (underscore separated words)
+  // Performance-data;
+  //   varname=value;warn;crit;min;max|varname=value;warn;crit;min;max
+  // Check-output
+  fmt.Println(string(status) + " az_healthcheck " + 
+             "azhealthcheck_response_time=" + strconv.FormatInt(responseTime, 10) + ";400;600;1;800 " + 
+             statusTxt  + " - " + 
+             statusMsg + " \\n\\n\\n" + 
+             statusLongmsg)
+
+
+
+
+}
