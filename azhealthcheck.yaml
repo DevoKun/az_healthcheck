@@ -1,27 +1,16 @@
 ---
-browserAgent: azh
-check_mk_service_name: az_healthcheck
+browserAgent: azhealthcheck
 checkInterval: 3000
 port: 3000
 
 hosts:
 
-  tomcat7:
-    name: tomcat7
-    url: http://0.0.0.0:8080/
+  devonhubner.org:
+    name: devonhubner.org
+    url: https://devonhubner.org/
 
-  apache2-http:
-    name: apache2-http
-    url: http://0.0.0.0:80/
+  devonhubner.com:
+    name: devonhubner.com
+    url: https://devonhubner.com/
     headers:
       'X-Browser-Agent': 'Firefox'
-
-  apache2-https:
-    name: apache2-https
-    url: https://0.0.0.0:443/
-    headers:
-      'X-Browser-Agent': 'AZ HealthCheck'
-    clientcertfilename:   /Users/devon.hubner/code/ssl-certificates/prod_techops_monitoring_ca/sub-ca/test.crt
-    clientkeyfilename:    /Users/devon.hubner/code/ssl-certificates/prod_techops_monitoring_ca/sub-ca/test.key
-
-

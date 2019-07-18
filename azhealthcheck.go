@@ -1,117 +1,26 @@
-// http response code constant names comes from: https://godoc.org/net/http#ResponseWriter
-//    StatusOK                            = 200 // RFC 7231, 6.3.1
-//    StatusCreated                       = 201 // RFC 7231, 6.3.2
-//    StatusAccepted                      = 202 // RFC 7231, 6.3.3
-//    StatusNonAuthoritativeInfo          = 203 // RFC 7231, 6.3.4
-//    StatusNoContent                     = 204 // RFC 7231, 6.3.5
-//    StatusResetContent                  = 205 // RFC 7231, 6.3.6
-//    StatusPartialContent                = 206 // RFC 7233, 4.1
-//    StatusMultiStatus                   = 207 // RFC 4918, 11.1
-//    StatusAlreadyReported               = 208 // RFC 5842, 7.1
-//    StatusIMUsed                        = 226 // RFC 3229, 10.4.1
-//
-//    StatusBadRequest                   = 400 // RFC 7231, 6.5.1
-//    StatusUnauthorized                 = 401 // RFC 7235, 3.1
-//    StatusPaymentRequired              = 402 // RFC 7231, 6.5.2
-//    StatusForbidden                    = 403 // RFC 7231, 6.5.3
-//    StatusNotFound                     = 404 // RFC 7231, 6.5.4
-//    StatusMethodNotAllowed             = 405 // RFC 7231, 6.5.5
-//    StatusNotAcceptable                = 406 // RFC 7231, 6.5.6
-//    StatusProxyAuthRequired            = 407 // RFC 7235, 3.2
-//    StatusRequestTimeout               = 408 // RFC 7231, 6.5.7
-//    StatusConflict                     = 409 // RFC 7231, 6.5.8
-//    StatusGone                         = 410 // RFC 7231, 6.5.9
-//
-//    StatusInternalServerError           = 500 // RFC 7231, 6.6.1
-//    StatusNotImplemented                = 501 // RFC 7231, 6.6.2
-//    StatusBadGateway                    = 502 // RFC 7231, 6.6.3
-//    StatusServiceUnavailable            = 503 // RFC 7231, 6.6.4
-//    StatusGatewayTimeout                = 504 // RFC 7231, 6.6.5
-//    StatusHTTPVersionNotSupported       = 505 // RFC 7231, 6.6.6
-//    StatusVariantAlsoNegotiates         = 506 // RFC 2295, 8.1
-//    StatusInsufficientStorage           = 507 // RFC 4918, 11.5
-//    StatusLoopDetected                  = 508 // RFC 5842, 7.2
-//    StatusNotExtended                   = 510 // RFC 2774, 7
-//    StatusNetworkAuthenticationRequired = 511 // RFC 6585, 6
-
-//
-// Package
-//
 
 package main
 
-//
-// Import
-//
-
 import (
   "crypto/tls"
-  //"crypto/x509"
   "fmt"
   "github.com/fatih/color"
-  "gopkg.in/yaml.v2"
   "io"
   "io/ioutil"
   "net"
   "net/http"
-  "os"
-  "path/filepath"
   "strconv"
   "strings"
   "time"
-  //"reflect"
-  //"github.com/davecgh/go-spew/spew"
-  //"syscall"
 ) // import
 
-//import "os/exec"
-//import "bytes"
-  
-
-//
-// Custom Types
-//
-
-type azHealthcheckConfig struct {
-  BrowserAgent          string `yaml:"browserAgent"`
-  Check_mk_service_name string `yaml:"check_mk_service_name"`
-  CheckInterval         string `yaml:"checkInterval"`
-  Port                  string `yaml:"port"`
-  Hosts                 map[string]azHealthcheckConfigHost `yaml:"hosts"`
-} // type azHealthcheckConfig
-
-type azHealthcheckConfigHost struct {
-  Name                 string  `yaml:"name"`
-  Url                  string  `yaml:"url"`
-  Headers   map[string]string  `yaml:"headers,omitempty"`
-  ClientCertFilename   string  `yaml:"clientcertfilename"`
-  ClientKeyFilename    string  `yaml:"clientkeyfilename"`
-  //ClientCACertFilename string  `yaml:"clientcacertfilename"`
-} // type azHealthcheckConfig_httpCheck
-
-
-
-//
-// Global Variables
-//
-
-var config azHealthcheckConfig
 var azHealthcheckErrorCount    = 0
 var azHealthcheckStatusMessage = ""
-
-//
-// Functions
-//
-
-func keepLines(s string, n int) string {
-  result := strings.Join(strings.Split(s, "\n")[:n], "\n")
-  return strings.Replace(result, "\r", "", -1)
-}
 
 
 //
 // HTTP Health Monitor
-// Makes call out to each server in the AZ
+// Makes call out to each target server
 // and sets global variable which is used by the http listener
 //
 
@@ -125,6 +34,10 @@ func httpHealthMonitor() {
 
 
 
+//
+// HTTP Health Check
+// Performs the HTTP-based client request to the target server.
+//
 func httpHealthCheck() {
   
   azHealthcheckErrorCountLocal       := 0
@@ -139,14 +52,9 @@ func httpHealthCheck() {
     fmt.Println( color.WhiteString("  * ") + color.YellowString(k) + color.WhiteString(": ") + color.CyanString(v.Url) )
 
     useClientCerts := false
-    if ( //((v.ClientCACertFilename + "x") != "x") && 
-         ((v.ClientCertFilename   + "x") != "x") && 
-         ((v.ClientKeyFilename    + "x") != "x") ) {
+    if (((v.ClientCertFilename   + "x") != "x") && 
+        ((v.ClientKeyFilename    + "x") != "x") ) {
       useClientCerts = true
-      //fmt.Println(color.WhiteString("    ** ") +
-      //            color.MagentaString("Client CA Cert Filename ") + 
-      //            color.WhiteString(": ") + 
-      //            color.RedString(v.ClientCACertFilename) )
 
       fmt.Println(color.WhiteString("    ** ") +
                   color.MagentaString("Client Cert Filename ") + 
@@ -164,36 +72,14 @@ func httpHealthCheck() {
         fmt.Println(err)
       } // if clientKeyPair
 
-      //clientCACert, err := ioutil.ReadFile(v.ClientCACertFilename)
-      //if err != nil {
-      //  fmt.Println(color.YellowString("    !! ") + 
-      //              color.RedString("Unable to load Client CA Cert") )
-      //  fmt.Println(err)
-      //} // if clientCACert
-
-    //caCertPool := x509.NewCertPool()
-    //caCertPool.AppendCertsFromPEM(clientCACert)
-
     tlsConfig = &tls.Config{
       Certificates: []tls.Certificate{clientKeyPair},
       InsecureSkipVerify: true, // do not fail if CN does not match the url
-      //RootCAs:      caCertPool,
     }
     tlsConfig.BuildNameToCertificate()
-    //fmt.Println(reflect.TypeOf(tlsConfig))
     } // if
 
-
-
     req, err := http.NewRequest("GET", v.Url, nil)
-
-/*
-cmd := exec.Command("lsof") //, "|", "grep", "azheal", "|", "grep", "ESTABLISHED")
-var out bytes.Buffer
-cmd.Stdout = &out
-cmd.Run()
-fmt.Println(out.String())
-*/
 
     if err != nil {
       errorCheck(err)
@@ -208,7 +94,6 @@ fmt.Println(out.String())
     } // for
 
     if useClientCerts {
-    //fmt.Println(useClientCerts)
       fmt.Println(color.WhiteString("    ** ") + 
                   color.GreenString("Connecting using Client Certs for ") + 
                   color.WhiteString("MutualSSL"))
@@ -222,9 +107,8 @@ fmt.Println(out.String())
         ResponseHeaderTimeout: 10 * time.Second,
         ExpectContinueTimeout:  1 * time.Second,
       } // netTransport
-      //fmt.Println(reflect.TypeOf(netTransport))
 
-    } else { // if useClientCerts true
+    } else {
       netTransport = &http.Transport{
         Dial: (&net.Dialer{
           Timeout:   10 * time.Second,
@@ -234,7 +118,6 @@ fmt.Println(out.String())
         ResponseHeaderTimeout: 10 * time.Second,
         ExpectContinueTimeout:  1 * time.Second,
       } // netTransport
-      //fmt.Println(reflect.TypeOf(netTransport))
     } // if useClientCerts false
 
     http.DefaultClient.Timeout = 10 * time.Second
@@ -285,15 +168,15 @@ fmt.Println(out.String())
 
     } // if err
 
-  if (resp != nil) {
-    resp.Body.Close()
-  } // if
+    if (resp != nil) {
+      resp.Body.Close()
+    } // if
 
   } // for
 
   fmt.Println("")
 
-  t := time.Now()
+  t   := time.Now()
   now := t.Format("2006-01-02 15:04:05 +0000 UTC")
 
   azHealthcheckHostStatusesMessage := ""
@@ -313,7 +196,12 @@ fmt.Println(out.String())
 } // func httpHealthCheck
 
 
-
+//
+// HTTP Health Answer
+// Answer HTTP client request
+// Return server status as an HTTP Response Code
+// and the contents of azHealthcheckStatusMessage, which should be a json string.
+//
 func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   
   fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.CyanString("Answering HTTP Request") )
@@ -343,126 +231,3 @@ func httpHealthAnswer(w http.ResponseWriter, r *http.Request) {
   io.WriteString(w, azHealthcheckStatusMessage + "\n")
 
 } // func httpHealthAnswer
-
-
-func printConfigVal(k string, v string) {
-  fmt.Println(color.WhiteString("  * ") + 
-              color.YellowString(k + "") + 
-              color.WhiteString(": [") + 
-              color.CyanString(v + "") + 
-              color.WhiteString("]"))
-
-} // func
-
-func azHealthcheckConfigLoad() {
-
-  fmt.Println(color.GreenString("Looking for YAML config file"))
-  configFilename := ""
-  absConfigFilename,_ := filepath.Abs("./azhealthcheck.yaml");
-  if _,err := os.Stat("/etc/azhealthcheck.yaml"); err == nil {
-    configFilename = "/etc/azhealthcheck.yaml"
-    printConfigVal("Found config file at", configFilename)
-  } else if _,err = os.Stat(absConfigFilename); err == nil {
-    configFilename = absConfigFilename
-    printConfigVal("Found config file at", configFilename)
-  } else {
-    fmt.Println(color.YellowString("  !! ") +
-                color.RedString("Unable to locate ") + 
-                color.YellowString("azhealthcheck.yaml") + 
-                color.RedString(" config file") +
-                color.YellowString(" !!"))
-    os.Exit(1)
-  } // if fileExists
-
-  //printConfigVal("Reading YAML config file", configFilename)
-  fmt.Println(color.GreenString("Reading YAML config file"))
-  yamlData, err := ioutil.ReadFile(configFilename)
-  //fmt.Printf("File contents: %s", yamlData)
-  errorCheck(err)
-
-  fmt.Println(color.GreenString("Parsing YAML"))
-  if err := yaml.Unmarshal([]byte(yamlData), &config); err != nil {
-    fmt.Println(err.Error())
-  } // if
-
-  fmt.Println(color.GreenString("Options"))
-  printConfigVal("browserAgent",          config.BrowserAgent)
-  printConfigVal("check_mk_service_name", config.Check_mk_service_name)
-  printConfigVal("checkInterval",         config.CheckInterval)
-  printConfigVal("port",                  config.Port)
-
-  fmt.Println("")
-  fmt.Println(color.GreenString("Host Checks"))
-  for k, v := range config.Hosts {
-    fmt.Println( color.WhiteString("  * ") + color.YellowString(k) )
-
-    fmt.Println( color.WhiteString("    ** ") + 
-                 color.YellowString("Name") + 
-                 color.WhiteString(": [") + 
-                 color.CyanString(v.Name) + 
-                 color.WhiteString("]") )
-
-    fmt.Println( color.WhiteString("    ** ") + 
-                 color.YellowString("URL") + 
-                 color.WhiteString(": [") + 
-                 color.CyanString(v.Url) + 
-                 color.WhiteString("]") )
-
-    fmt.Println( color.WhiteString("    ** ") + 
-                 color.YellowString("Headers") )
-    for hk,hv := range v.Headers {
-      fmt.Println(color.WhiteString("       *** ") + 
-                  color.MagentaString(hk) + 
-                  color.WhiteString(": ") + 
-                  color.RedString(hv) )
-    } // for
-
-    //fmt.Println( color.WhiteString("    ** ") + 
-    //             color.YellowString("ClientCACertFilename") + 
-    //             color.WhiteString(": [") + 
-    //             color.CyanString(v.ClientCACertFilename) + 
-    //             color.WhiteString("]") )
-    fmt.Println( color.WhiteString("    ** ") + 
-                 color.YellowString("ClientCertFilename") + 
-                 color.WhiteString("..: [") + 
-                 color.CyanString(v.ClientCertFilename) + 
-                 color.WhiteString("]") )
-    fmt.Println( color.WhiteString("    ** ") + 
-                 color.YellowString("ClientKeyFilename") + 
-                 color.WhiteString("...: [") + 
-                 color.CyanString(v.ClientKeyFilename) + 
-                 color.WhiteString("]") )
-
-  } // for
-
-  fmt.Println("")
-
-} // func azHealthcheckConfigLoad
-
-
-func errorCheck(e error) {
-  if e != nil {
-    panic(e)
-  } // if
-} // func errorCheck
-
-
-
-func main() {
-
-  http.DefaultClient.Timeout = 10 * time.Second
-
-  azHealthcheckConfigLoad()
-
-  go httpHealthMonitor()
-
-  fmt.Println(color.YellowString(time.Now().Format("2006-01-02 15:04:05 +0000 UTC")), color.GreenString("Starting up http listener...") )
-  http.HandleFunc("/", httpHealthAnswer)
-  http.ListenAndServe(":3000", nil)
-
-} // func main
-
-
-
-
-

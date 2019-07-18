@@ -78,7 +78,6 @@ hosts:
 
 ---
 browserAgent: azh
-check_mk_service_name: azhealthcheck
 checkInterval: 3000
 port: 3000
 

@@ -21,7 +21,7 @@ for GOOS in $TARGET_OPERATING_SYSTEMS; do
     if [ $GOOS == "windows" ]; then
       FINAL_FILENAME="${FINAL_FILENAME}.exe"
     fi
-    go build -o $FINAL_FILENAME ${TARGET_FILENAME}.go
+    go build -o $FINAL_FILENAME .
   done
 done
 
